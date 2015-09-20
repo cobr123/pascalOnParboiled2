@@ -38,7 +38,7 @@ class LoopParser(val input: ParserInput) extends Parser {
   }
 
   def ifStatement = rule {
-    "if" ~ expression ~ "then" ~ statement ~ opt("else" ~ statement)
+    "if" ~ expression ~ "then" ~ statement ~ optional("else" ~ statement)
   }
 
   def caseStatement = rule {
@@ -116,11 +116,11 @@ class LoopParser(val input: ParserInput) extends Parser {
   }
 
   def procedureStatement = rule {
-    identifier ~ opt("(" ~ parameterList ~ ")")
+    identifier ~ optional("(" ~ parameterList ~ ")")
   }
 
   def parameterList = rule {
-    actualParameter ~ rep("," ~ actualParameter)
+    actualParameter ~ zeroOrMore("," ~ actualParameter)
   }
 
   def actualParameter = rule {
@@ -153,23 +153,23 @@ class LoopParser(val input: ParserInput) extends Parser {
   def variable = rule {
     ("@" ~ identifier // AT is root of identifier; then other op becomes root
       | identifier
-      ) ~ rep("[" ~ expression ~ rep("," ~ expression) ~ "]" | "(." ~ expression ~ rep("," ~ expression) ~ ".)" | "." ~ identifier | "^")
+      ) ~ zeroOrMore("[" ~ expression ~ zeroOrMore("," ~ expression) ~ "]" | "(." ~ expression ~ zeroOrMore("," ~ expression) ~ ".)" | "." ~ identifier | "^")
   }
 
   def expression = rule {
-    simpleExpression ~ rep(("=" | "<>" | "<" | "<=" | ">=" | ">" | "in") ~ simpleExpression)
+    simpleExpression ~ zeroOrMore(("=" | "<>" | "<" | "<=" | ">=" | ">" | "in") ~ simpleExpression)
   }
 
   def simpleExpression = rule {
-    term ~ rep(("+" | "-" | "or") ~ term)
+    term ~ zeroOrMore(("+" | "-" | "or") ~ term)
   }
 
   def term = rule {
-    signedFactor ~ rep(("*" | "/" | "div" | "mod" | "and") ~ signedFactor)
+    signedFactor ~ zeroOrMore(("*" | "/" | "div" | "mod" | "and") ~ signedFactor)
   }
 
   def signedFactor = rule {
-    opt("+" | "-") ~ factor
+    optional("+" | "-") ~ factor
   }
 
   def factor = rule {
@@ -181,11 +181,11 @@ class LoopParser(val input: ParserInput) extends Parser {
   }
 
   def elementList = rule {
-    element ~ rep("," ~ element)
+    element ~ zeroOrMore("," ~ element)
   }
 
   def element = rule {
-    expression ~ opt(".." ~ expression)
+    expression ~ optional(".." ~ expression)
   }
 
   def unsignedConstant = rule {
