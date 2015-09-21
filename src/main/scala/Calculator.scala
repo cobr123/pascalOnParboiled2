@@ -35,5 +35,5 @@ class Calculator(val input: ParserInput) extends Parser {
 }
 
 object CalculatorTest extends App {
-  println(new Calculator("1+1").InputLine.run()) // evaluates to `scala.util.Success(2)
+  println(new Calculator("2*3+4*(5)").InputLine.run()) // evaluates to `scala.util.Success(26)
 }

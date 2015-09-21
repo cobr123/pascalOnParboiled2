@@ -5,24 +5,42 @@
 import org.parboiled2._
 
 class LoopParser(val input: ParserInput) extends Parser {
-  def InputText = rule {
-    statements ~ EOI
+  def InputText: Rule1[Any] = rule {
+    push(statements) ~ EOI
   }
 
   //pascal ebnf
   def compoundStatement = rule {
-    "begin" ~ zeroOrMore(statements) ~ "end"
+    atomic(ignoreCase("begin")) ~ zeroOrMore(statements) ~ atomic(ignoreCase("end"))
+  }
+
+  def ws = rule {
+    zeroOrMore(anyOf(" \t\r\n"))
   }
 
   def statements = rule {
-    oneOrMore(statement ~ ";")
-  }
-  def label = rule {
-    capture(Digits) ~> (_.toInt)
+    oneOrMore(push(statement) ~ ";")
   }
 
-  def statement = rule {
-    label ~ ":" ~ unlabelledStatement | unlabelledStatement
+  def identifier = rule {
+    oneOrMore(CharPredicate.AlphaNum)
+  }
+
+  def label = rule {
+    oneOrMore(CharPredicate.Digit)
+  }
+
+  def unsignedInteger = rule {
+    oneOrMore(CharPredicate.Digit)
+  }
+
+  def unsignedNumber = rule {
+    oneOrMore(CharPredicate.Digit)
+  }
+
+
+  def statement: Rule2[Any, Any] = rule {
+    optional(push(label) ~ ":") ~ push(unlabelledStatement)
   }
 
   def unlabelledStatement = rule {
@@ -42,7 +60,7 @@ class LoopParser(val input: ParserInput) extends Parser {
   }
 
   def caseStatement = rule {
-    "case" ~ expression ~ "of" ~ caseListElement ~ rep(";" ~ caseListElement) ~ ((";" ~ "else" ~ statements) ?) ~ "end"
+    "case" ~ expression ~ "of" ~ oneOrMore(caseListElement).separatedBy(";") ~ optional(";" ~ "else" ~ statements) ~ "end"
   }
 
   def caseListElement = rule {
@@ -50,16 +68,16 @@ class LoopParser(val input: ParserInput) extends Parser {
   }
 
   def constList = rule {
-    constant ~ rep("," ~ constant)
+    oneOrMore(constant).separatedBy(",")
   }
 
-  def constantDefinitionPart = rule {
-    "const" ~ constantDefinition ~ rep(";" ~ constantDefinition) ~ ";"
-  }
-
-  def constantDefinition = rule {
-    identifier ~ "=" ~ constant
-  }
+  //  def constantDefinitionPart = rule {
+  //    "const" ~ constantDefinition ~ zeroOrMore(";" ~ constantDefinition) ~ ";"
+  //  }
+  //
+  //  def constantDefinition = rule {
+  //    identifier ~ "=" ~ constant
+  //  }
 
   def constantChr = rule {
     "chr" ~ "(" ~ unsignedInteger ~ ")"
@@ -70,7 +88,7 @@ class LoopParser(val input: ParserInput) extends Parser {
   }
 
   def string = rule {
-    stringLiteral
+    "'" ~ zeroOrMore(CharPredicate.Printable | "''") ~ "'"
   }
 
   def repetetiveStatement = rule {
@@ -89,7 +107,9 @@ class LoopParser(val input: ParserInput) extends Parser {
     "for" ~ identifier ~ ":=" ~ forList ~ "do" ~ statement
   }
 
-  def forList = rule {initialValue ~ ("to" | "downto") ~ finalValue
+  def forList = rule {
+    initialValue ~ ("to" | "downto") ~ finalValue
+  }
 
   def initialValue = rule {
     expression
@@ -104,15 +124,11 @@ class LoopParser(val input: ParserInput) extends Parser {
   }
 
   def recordVariableList = rule {
-    variable ~ rep("," ~ variable)
+    oneOrMore(variable).separatedBy(",")
   }
 
   def simpleStatement = rule {
-    assignmentStatement | procedureStatement | gotoStatement | emptyStatement
-  }
-
-  def emptyStatement = rule {
-    """[(\r?\n)\s]+""".r
+    assignmentStatement | procedureStatement | gotoStatement
   }
 
   def procedureStatement = rule {
@@ -120,7 +136,7 @@ class LoopParser(val input: ParserInput) extends Parser {
   }
 
   def parameterList = rule {
-    actualParameter ~ zeroOrMore("," ~ actualParameter)
+    oneOrMore(actualParameter).separatedBy(",")
   }
 
   def actualParameter = rule {
@@ -135,33 +151,45 @@ class LoopParser(val input: ParserInput) extends Parser {
     variable ~ ":=" ~ expression
   }
 
-  /** A variable is an id with a suffix and can look like:
-    * id
-    * id[expr,...]
-    * id.id
-    * id.id[expr,...]
-    * id^
-    * id^.id
-    * id.id[expr,...]
-    * ...
-    *
-    * LL has a really hard time with this construct as it's naturally
-    * left-recursive.  We have to turn into a simple loop rather than
-    * recursive loop, hence, the suffixes.  I keep in the same rule
-    * for easy tree construction.
-    */
+  //  /** A variable is an id with a suffix and can look like:
+  //    * id
+  //    * id[expr,...]
+  //    * id.id
+  //    * id.id[expr,...]
+  //    * id^
+  //    * id^.id
+  //    * id.id[expr,...]
+  //    * ...
+  //    *
+  //    * LL has a really hard time with this construct as it's naturally
+  //    * left-recursive.  We have to turn into a simple loop rather than
+  //    * recursive loop, hence, the suffixes.  I keep in the same rule
+  //    * for easy tree construction.
+  //    */
   def variable = rule {
-    ("@" ~ identifier // AT is root of identifier; then other op becomes root
+    ("@" ~ identifier
       | identifier
-      ) ~ zeroOrMore("[" ~ expression ~ zeroOrMore("," ~ expression) ~ "]" | "(." ~ expression ~ zeroOrMore("," ~ expression) ~ ".)" | "." ~ identifier | "^")
+      ) ~ zeroOrMore(set | variable_part_dot | "^")
+  }
+
+  def variable_part_dot = rule {
+    "." ~ identifier
+  }
+
+  def expression_part = rule {
+    oneOrMore(("=" | "<>" | "<" | "<=" | ">=" | ">" | "in") ~ simpleExpression)
   }
 
   def expression = rule {
-    simpleExpression ~ zeroOrMore(("=" | "<>" | "<" | "<=" | ">=" | ">" | "in") ~ simpleExpression)
+    simpleExpression ~ optional(expression_part)
+  }
+
+  def simpleExpression_part = rule {
+    oneOrMore(("+" | "-" | "or") ~ term)
   }
 
   def simpleExpression = rule {
-    term ~ zeroOrMore(("+" | "-" | "or") ~ term)
+    term ~ optional(simpleExpression_part)
   }
 
   def term = rule {
@@ -172,8 +200,16 @@ class LoopParser(val input: ParserInput) extends Parser {
     optional("+" | "-") ~ factor
   }
 
-  def factor = rule {
-    variable | "(" ~ expression ~ ")" | functionDesignator | unsignedConstant | set | "not" ~ factor
+  def factor:Rule1[Any] = rule {
+    variable | factorInParen | functionDesignator | unsignedConstant | set | notFactor
+  }
+
+  def factorInParen = rule {
+    "(" ~ expression ~ ")"
+  }
+
+  def notFactor = rule {
+    "not" ~ factor
   }
 
   def set = rule {
@@ -181,11 +217,11 @@ class LoopParser(val input: ParserInput) extends Parser {
   }
 
   def elementList = rule {
-    element ~ zeroOrMore("," ~ element)
+    oneOrMore(element).separatedBy(",")
   }
 
   def element = rule {
-    expression ~ optional(".." ~ expression)
+    oneOrMore(expression).separatedBy("..")
   }
 
   def unsignedConstant = rule {
@@ -198,9 +234,9 @@ class LoopParser(val input: ParserInput) extends Parser {
 }
 
 object TestLoopParser extends App {
-  //val cmd = """i := 0;"""
+  val cmd = """i := 0;"""
   // val cmd = """showMessage(avAttr[i])""
   //  val cmd = """begin end;"""
-  val cmd = """begin for i := 0 to 10 do begin showMessage(avAttr[i]); end;end;"""
+  //val cmd = """begin for i := 0 to 10 do begin showMessage(avAttr[i]); end;end;"""
   println(new LoopParser(cmd).InputText.run()) // evaluates to `scala.util.Success(2)
 }
